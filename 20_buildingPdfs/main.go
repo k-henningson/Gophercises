@@ -38,6 +38,10 @@ func main() {
 		{60, 300},
 	}, "F")
 
+	pdf.ImageOptions("images/jump.png", 275, 275, 92, 0, false, gofpdf.ImageOptions{
+		ReadDpi: true,
+	}, 0, "")
+
 	// Grid
 	drawGrid(pdf)
 

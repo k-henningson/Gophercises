@@ -79,13 +79,34 @@ func main() {
 	// 	ReadDpi: true,
 	// }, 0, "")
 
-	// Grid
-	// drawGrid(pdf)
+	// CLIENT SUMMARY INFO
+	_, sy := summaryBlock(pdf, xIndent, bannerHt+lineHt*2.0, "Billed To", "Client Name", "123 Client Address", "City, Province, Country", "Postal Code")
+	fmt.Println(sy)
+	summaryBlock(pdf, xIndent*2.0+lineHt*12.5, bannerHt+lineHt*2.0, "Invoice Number", "0000001234")
+	summaryBlock(pdf, xIndent*2.0+lineHt*12.5, bannerHt+lineHt*6.25, "Date Of Issue", "27/10/2023")
 
-	err := pdf.OutputFileAndClose("p2.pdf")
+	// GRID
+	drawGrid(pdf)
+
+	err := pdf.OutputFileAndClose("p3.pdf")
 	if err != nil {
 		panic(err)
 	}
+}
+
+func summaryBlock(pdf *gofpdf.Fpdf, x, y float64, title string, data ...string) (float64, float64) {
+	pdf.SetFont("times", "", 14)
+	pdf.SetTextColor(180, 180, 180)
+	_, lineHt := pdf.GetFontSize()
+	y = y + lineHt
+	pdf.Text(x, y, title)
+	y = y + lineHt*.25
+	pdf.SetTextColor(50, 50, 50)
+	for _, str := range data {
+		y = y + lineHt*1.25
+		pdf.Text(x, y, str)
+	}
+	return x, y
 }
 
 func drawGrid(pdf *gofpdf.Fpdf) {

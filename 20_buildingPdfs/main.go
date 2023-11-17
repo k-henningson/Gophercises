@@ -9,9 +9,51 @@ import (
 const (
 	bannerHt = 94.0
 	xIndent  = 40.0
+	taxRate  = 0.09
 )
 
+type LineItem struct {
+	UnitName       string
+	PricePerUnit   int
+	UnitsPurchased int
+}
+
 func main() {
+	lineItems := []LineItem{
+		{
+			UnitName:       "2x6 Lumber - 8'",
+			PricePerUnit:   375, // in cents
+			UnitsPurchased: 220,
+		}, {
+			UnitName:       "Drywall Sheet",
+			PricePerUnit:   922, // in cents
+			UnitsPurchased: 50,
+		}, {
+			UnitName:       "Red Paint",
+			PricePerUnit:   1455, // in cents
+			UnitsPurchased: 3,
+		}, {
+			UnitName:       "This is a line item with a very long description to test that our word wrapping is working as expected",
+			PricePerUnit:   3211, // in cents
+			UnitsPurchased: 3,
+		}, {
+			UnitName:       "Blue Paint",
+			PricePerUnit:   6, // in cents
+			UnitsPurchased: 3350,
+		}, {
+			UnitName:       "Green Brontosauri",
+			PricePerUnit:   90210, // in cents
+			UnitsPurchased: 50,
+		},
+	}
+	subtotal := 0
+	for _, li := range lineItems {
+		subtotal += li.PricePerUnit * li.UnitsPurchased
+	}
+	tax := int(float64(subtotal) * taxRate)
+	total := subtotal + tax
+	totalUSD := toUSD(total)
+
 	pdf := gofpdf.New(gofpdf.OrientationPortrait, gofpdf.UnitPoint, gofpdf.PageSizeLetter, "")
 	w, h := pdf.GetPageSize()
 	fmt.Printf("width=%v, height=%v\n", w, h)
@@ -32,6 +74,11 @@ func main() {
 		{w, h},
 	}, "F")
 
+	// HEADER LOGO
+	pdf.ImageOptions("images/jump.png", 248.0, 0+(bannerHt-(bannerHt/1.5))/2.0, 0, bannerHt/1.5, false, gofpdf.ImageOptions{
+		ReadDpi: true,
+	}, 0, "")
+
 	// HEADER INVOICE
 	pdf.SetFont("Arial", "B", 40)
 	pdf.SetTextColor(255, 255, 255)
@@ -50,48 +97,128 @@ func main() {
 	pdf.MoveTo(w-xIndent-124.0, (bannerHt-(lineHt*1.5*3.0))/2.0)
 	pdf.MultiCell(124.0, lineHt*1.5, "123 Brown Street\nVancouver, BC\nCanada", gofpdf.BorderNone, gofpdf.AlignRight, false)
 
-	// // Text layout and style
-	// pdf.MoveTo(0, 0)
-	// pdf.SetFont("arial", "B", 30)
-	// _, lineHt := pdf.GetFontSize()
-	// pdf.SetTextColor(255, 0, 0)
-	// pdf.Text(40, lineHt, "Hello, world")
-	// pdf.MoveTo(0, lineHt*2.0)
-
-	// pdf.SetFont("times", "", 18)
-	// pdf.SetTextColor(100, 100, 100)
-	// _, lineHt = pdf.GetFontSize()
-	// pdf.MultiCell(0, lineHt*1.5, "This is some text. If it is too long it will be word wrapped. If there is a new line it will\n be wrapped as well.", gofpdf.BorderNone, gofpdf.AlignRight, false)
-
-	// // Shapes
-	// pdf.SetFillColor(0, 255, 0)
-	// pdf.SetDrawColor(0, 0, 255)
-	// pdf.Rect(10, 100, 100, 100, "FD")
-	// pdf.SetFillColor(100, 200, 200)
-	// pdf.Polygon([]gofpdf.PointType{
-	// 	{110, 250},
-	// 	{160, 300},
-	// 	{110, 350},
-	// 	{60, 300},
-	// }, "F")
-
-	// pdf.ImageOptions("images/jump.png", 275, 275, 92, 0, false, gofpdf.ImageOptions{
-	// 	ReadDpi: true,
-	// }, 0, "")
-
 	// CLIENT SUMMARY INFO
 	_, sy := summaryBlock(pdf, xIndent, bannerHt+lineHt*2.0, "Billed To", "Client Name", "123 Client Address", "City, Province, Country", "Postal Code")
-	fmt.Println(sy)
 	summaryBlock(pdf, xIndent*2.0+lineHt*12.5, bannerHt+lineHt*2.0, "Invoice Number", "0000001234")
 	summaryBlock(pdf, xIndent*2.0+lineHt*12.5, bannerHt+lineHt*6.25, "Date Of Issue", "27/10/2023")
 
-	// GRID
-	drawGrid(pdf)
+	// CLIENT SUMMARY TOTAL
+	x, y := w-xIndent-124.0, bannerHt+lineHt*2.25
+	pdf.MoveTo(x, y)
+	pdf.SetFont("times", "", 14)
+	_, lineHt = pdf.GetFontSize()
+	pdf.SetTextColor(180, 180, 180)
+	pdf.CellFormat(124.0, lineHt, "Invoice Total", gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	x, y = x+2.0, y+lineHt*1.5
+	pdf.MoveTo(x, y)
+	pdf.SetFont("times", "", 48)
+	_, lineHt = pdf.GetFontSize()
+	alpha := 58
+	pdf.SetTextColor(72+alpha, 42+alpha, 55+alpha)
+	// totalCAD := "$1234.50"
+	pdf.CellFormat(124.0, lineHt, totalUSD, gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	x, y = x-2.0, y+lineHt*1.25
 
-	err := pdf.OutputFileAndClose("p3.pdf")
+	if sy > y {
+		y = sy
+	}
+	x, y = xIndent-20.0, y+30.0
+	pdf.Rect(x, y, w-(xIndent*2.0)+40.0, 3.0, "F")
+
+	// CLIENT LINE ITEM HEADERS
+
+	pdf.SetFont("times", "", 14)
+	_, lineHt = pdf.GetFontSize()
+	pdf.SetTextColor(180, 180, 180)
+	x, y = xIndent-2.0, y+lineHt
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(w/2.65+1.5, lineHt, "Description", gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignLeft, false, 0, "")
+	x = x + w/2.65 + 1.5
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(100.0, lineHt, "Price Per Unit", gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	x = x + 100.0
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(80.0, lineHt, "Quantity", gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	x = w - xIndent - 2.0 - 119.5
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(119.5, lineHt, "Amount", gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+
+	// CLIENT LINE ITEMS
+
+	y = y + lineHt
+	for _, li := range lineItems {
+		x, y = lineItem(pdf, x, y, li)
+	}
+
+	x, y = w/1.75, y+lineHt*2.25
+	x, y = trailerLine(pdf, x, y, "Subtotal", subtotal)
+	x, y = trailerLine(pdf, x, y, "Tax", tax)
+	pdf.SetDrawColor(180, 180, 180)
+	pdf.Line(x+20.0, y, x+220.0, y)
+	y = y + lineHt*0.5
+	x, y = trailerLine(pdf, x, y, "Total", total)
+
+	// GRID
+	// drawGrid(pdf)
+
+	err := pdf.OutputFileAndClose("p4.pdf")
 	if err != nil {
 		panic(err)
 	}
+}
+
+func trailerLine(pdf *gofpdf.Fpdf, x, y float64, label string, amount int) (float64, float64) {
+	origX := x
+	w, _ := pdf.GetPageSize()
+	pdf.SetFont("times", "", 14)
+	_, lineHt := pdf.GetFontSize()
+	pdf.SetTextColor(180, 180, 180)
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(80.0, lineHt, label, gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	x = w - xIndent - 2.0 - 119.5
+	pdf.MoveTo(x, y)
+	pdf.SetTextColor(50, 50, 50)
+	pdf.CellFormat(119.5, lineHt, toUSD(amount), gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	y = y + lineHt*1.5
+	return origX, y
+}
+
+func toUSD(cents int) string {
+	centsStr := fmt.Sprintf("%d", cents%100)
+	if len(centsStr) < 2 {
+		centsStr = "0" + centsStr
+	}
+	return fmt.Sprintf("$%d.%s", cents/100, centsStr)
+}
+
+func lineItem(pdf *gofpdf.Fpdf, x, y float64, lineItem LineItem) (float64, float64) {
+	origX := x
+	w, _ := pdf.GetPageSize()
+	pdf.SetFont("times", "", 14)
+	_, lineHt := pdf.GetFontSize()
+	pdf.SetTextColor(50, 50, 50)
+	pdf.MoveTo(x, y)
+	x, y = xIndent-2.0, y+lineHt*.75
+	pdf.MoveTo(x, y)
+	pdf.MultiCell(w/2.65+1.5, lineHt, lineItem.UnitName, gofpdf.BorderNone, gofpdf.AlignLeft, false)
+	tmp := pdf.SplitLines([]byte(lineItem.UnitName), w/2.65+1.5)
+	maxY := y + float64(len(tmp)-1)*lineHt
+	x = x + w/2.65 + 1.5
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(100.0, lineHt, toUSD(lineItem.PricePerUnit), gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	x = x + 100.0
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(80.0, lineHt, fmt.Sprintf("%d", lineItem.UnitsPurchased), gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	x = w - xIndent - 2.0 - 119.5
+	pdf.MoveTo(x, y)
+	pdf.CellFormat(119.5, lineHt, toUSD(lineItem.PricePerUnit*lineItem.UnitsPurchased), gofpdf.BorderNone, gofpdf.LineBreakNone, gofpdf.AlignRight, false, 0, "")
+	if maxY > y {
+		y = maxY
+	}
+	y = y + lineHt*1.75
+	pdf.SetDrawColor(180, 180, 180)
+	pdf.Line(xIndent-10.0, y, w-xIndent+10.0, y)
+	return origX, y
 }
 
 func summaryBlock(pdf *gofpdf.Fpdf, x, y float64, title string, data ...string) (float64, float64) {
